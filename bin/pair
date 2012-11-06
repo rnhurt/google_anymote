@@ -1,5 +1,12 @@
 #!/usr/bin/env ruby
 
 require 'google_anymote'
+cert  = File.read 'cert.pem'
+pair = GoogleAnymote::Pair.new(cert, 'NSXGT1-8064773.local.', 'test', 'test')
+pair.start_pairing
 
-puts "insert pairing code here..."
+# Collect pairing code
+print 'Enter the code from the TV: '
+code = gets.chomp
+
+pair.complete_pairing(code)

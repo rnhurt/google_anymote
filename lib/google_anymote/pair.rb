@@ -8,21 +8,74 @@ module GoogleAnymote
   ##
   # Class to send events to a connected GoogleTV
   class Pair
-    attr_reader :pair
+    attr_reader :pair, :cert, :host, :gtv
 
     ##
     # Initializes the Pair class
     #
+    # @param [Object] cert SSL certificate for this client
+    # @param [String] host hostname or IP address of the Google TV
     # @param [String] client_name name of the client your connecting from
     # @param [String] service_name name of the service (generally 'AnyMote')
     # @return an instance of Pair
-    def initialize(client_name = '', service_name = 'AnyMote')
+    def initialize(cert, host, client_name = '', service_name = 'AnyMote')
       @pair = PairingRequest.new
-      @pair.client_name  = 'grendel3'
-      @pair.service_name = 'AnyMote'
-
-      send_message(pair, OuterMessage::MessageType::MESSAGE_TYPE_PAIRING_REQUEST)
+      @cert = cert
+      @host = host
+      @pair.client_name  = client_name
+      @pair.service_name = service_name
     end
+
+
+    ##
+    # Start the pairing process
+    #
+    # Once the TV recieves the pairing request it will display a 4 digit number.
+    # This number needs to be feed into the next step in the process, complete_pairing().
+    #
+    def start_pairing
+      @gtv = GoogleAnymote::TV.new(@cert, host, 9551 + 1)
+
+      # Let the TV know that we want to pair with it
+      send_message(pair, OuterMessage::MessageType::MESSAGE_TYPE_PAIRING_REQUEST)
+
+      # Build the options and send them to the TV
+      options       = Options.new
+      encoding      = Options::Encoding.new
+      encoding.type = Options::Encoding::EncodingType::ENCODING_TYPE_HEXADECIMAL
+      encoding.symbol_length = 4
+      options.input_encodings   << encoding
+      options.output_encodings  << encoding
+      send_message(options, OuterMessage::MessageType::MESSAGE_TYPE_OPTIONS)
+
+      # Build configuration and send it to the TV
+      config        = Configuration.new
+      encoding      = Options::Encoding.new
+      encoding.type = Options::Encoding::EncodingType::ENCODING_TYPE_HEXADECIMAL
+      config.encoding               = encoding
+      config.encoding.symbol_length = 4
+      config.client_role            = Options::RoleType::ROLE_TYPE_INPUT
+      outer = send_message(config, OuterMessage::MessageType::MESSAGE_TYPE_CONFIGURATION)
+      
+      raise PairingFailed, outer.status unless OuterMessage::Status::STATUS_OK == outer.status
+    end
+
+    ##
+    # Complete the pairing process
+    # @param [String] code The code displayed on the Google TV we are trying to pair with.
+    #
+    def complete_pairing(code)
+      # Send secret code to the TV to compete the pairing process
+      secret = Secret.new
+      secret.secret = encode_hex_secret(code)
+      outer = send_message(secret, OuterMessage::MessageType::MESSAGE_TYPE_SECRET)
+
+      # Clean up
+      @gtv.ssl_client.close
+
+      raise PairingFailed, outer.status unless OuterMessage::Status::STATUS_OK == outer.status
+    end
+
 
 
     private
@@ -39,27 +92,14 @@ module GoogleAnymote
       message_size = [message.length].pack('N')
 
       # Write the message to the SSL client and get the response
-      @ssl_client.write(message_size + message)
+      @gtv.ssl_client.write(message_size + message)
       data = ""
-      @ssl_client.readpartial(1000,data)
-      @ssl_client.readpartial(1000,data)
+      @gtv.ssl_client.readpartial(1000,data)
+      @gtv.ssl_client.readpartial(1000,data)
 
       # Extract the response from the Google TV
       outer = OuterMessage.new
       outer.parse_from_string(data)
-
-      puts "== SERVER SAID =="
-      p "data: #{data}"
-      p "  outer (status) : #{outer.status.to_s}"
-      p "  outer (type)   : #{outer.type.to_s}"
-      
-      if !outer.payload.empty?
-        p "  outer (payload): #{outer.payload.to_s}"
-        payload = Options.new
-        payload.parse_from_string(outer.payload.to_s)
-        p "                 : #{payload.inspect}"
-      end
-      puts "================="
 
       return outer
     end
@@ -82,74 +122,29 @@ module GoogleAnymote
     end
 
     ##
-    # Encode the 
+    # Encode the secret from the TV into an OpenSSL Digest
+    #
     # @param [String] secret pairing code from the TV's screen
     # @return [Digest] OpenSSL Digest containing the encoded secret
     def encode_hex_secret secret
-        # # TODO(stevenle): Something further encodes the secret to a 64-char hex
-        # # string. For now, use adb logcat to figure out what the expected challenge
-        # # is. Eventually, make sure the encoding matches the server reference
-        # # implementation:
-        # #   http://code.google.com/p/google-tv-pairing-protocol/source/browse/src/com/google/polo/pairing/PoloChallengeResponse.java
+      # TODO(stevenle): Something further encodes the secret to a 64-char hex
+      # string. For now, use adb logcat to figure out what the expected challenge
+      # is. Eventually, make sure the encoding matches the server reference
+      # implementation:
+      #   http://code.google.com/p/google-tv-pairing-protocol/source/browse/src/com/google/polo/pairing/PoloChallengeResponse.java
 
-        encoded_secret = [secret.to_i(16)].pack("N").unpack("cccc")[2..3].pack("c*")
-        # nonce = encoded_secret[1]
+      encoded_secret = [secret.to_i(16)].pack("N").unpack("cccc")[2..3].pack("c*")
 
-        # Per "Polo Implementation Overview", section 6.1, client key material is
-        # hashed first, followed by the server key material, followed by the nonce.
-        digest = OpenSSL::Digest::Digest.new('sha256')
-        digest << @ssl_client.cert.public_key.n.to_s(2)       # client modulus
-        digest << @ssl_client.cert.public_key.e.to_s(2)       # client exponent
-        digest << @ssl_client.peer_cert.public_key.n.to_s(2)  # server modulus
-        digest << @ssl_client.peer_cert.public_key.e.to_s(2)  # server exponent
+      # Per "Polo Implementation Overview", section 6.1, client key material is
+      # hashed first, followed by the server key material, followed by the nonce.
+      digest = OpenSSL::Digest::Digest.new('sha256')
+      digest << @gtv.ssl_client.cert.public_key.n.to_s(2)       # client modulus
+      digest << @gtv.ssl_client.cert.public_key.e.to_s(2)       # client exponent
+      digest << @gtv.ssl_client.peer_cert.public_key.n.to_s(2)  # server modulus
+      digest << @gtv.ssl_client.peer_cert.public_key.e.to_s(2)  # server exponent
 
-        digest << encoded_secret[encoded_secret.size / 2]
-        return digest.digest
-    end
-
-    ##
-    # Complete the pairing process
-    #
-    def pair
-      puts "\nDEBUG: sending pairing request"
-
-
-      # Build the options
-      options       = Options.new
-      encoding      = Options::Encoding.new
-      encoding.type = Options::Encoding::EncodingType::ENCODING_TYPE_HEXADECIMAL
-      encoding.symbol_length = 4
-      options.input_encodings   << encoding
-      options.output_encodings  << encoding
-      puts "\nDEBUG: sending options request"
-      send_message(options, OuterMessage::MessageType::MESSAGE_TYPE_OPTIONS)
-
-
-      # Build configuration
-      config = Configuration.new
-      encoding      = Options::Encoding.new
-      encoding.type = Options::Encoding::EncodingType::ENCODING_TYPE_HEXADECIMAL
-      config.encoding               = encoding
-      config.encoding.symbol_length = 4
-      config.client_role            = Options::RoleType::ROLE_TYPE_INPUT
-      puts "\nDEBUG: sending configuration request"
-      send_message(config, OuterMessage::MessageType::MESSAGE_TYPE_CONFIGURATION)
-
-
-      # Collect pairing code
-      print 'Enter the code from the TV: '
-      code = gets.chomp
-
-      # Send secret
-      secret = Secret.new
-      secret.secret = encode_hex_secret(code)
-      puts "\nDEBUG: sending secret request"
-      send_message(secret, OuterMessage::MessageType::MESSAGE_TYPE_SECRET)
-
-      # Clean up
-      @ssl_client.close
-
-      puts "\n\n- DONE -\n"
+      digest << encoded_secret[encoded_secret.size / 2]
+      return digest.digest
     end
   end
 end

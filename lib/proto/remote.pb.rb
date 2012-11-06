@@ -138,7 +138,7 @@ require 'protobuf/message/extend'
 ::Protobuf::OPTIONS[:"java_package"] = "com.google.anymote"
 ::Protobuf::OPTIONS[:"optimize_for"] = :LITE_RUNTIME
 
-require './lib/keycodes.pb'
+require 'proto/keycodes.pb'
 
 class RemoteMessage < ::Protobuf::Message
   defined_in __FILE__
