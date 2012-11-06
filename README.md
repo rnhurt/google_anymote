@@ -49,8 +49,13 @@ This gem includes several command line utilities to get you up and running.
 
 ### As a gem
 
-1. Create a GoogleAnymote::TV object - gtv = GoogleAnymote::TV.new(my_cert, hostname)
-2. Fling URIs to that TV - gtv.fling_uri('http://github.com')
+1. Create a GoogleAnymote::TV object
+    
+     gtv = GoogleAnymote::TV.new(my_cert, hostname)
+
+2. Fling URIs to that TV 
+
+    gtv.fling_uri('http://github.com')
 
 ## Contributing
 
