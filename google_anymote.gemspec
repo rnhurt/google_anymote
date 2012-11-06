@@ -6,7 +6,7 @@ Gem::Specification.new do |gem|
   gem.email         = ["rnhurt@gmail.com"]
   gem.description   = %q{Ruby implementation of the Google Anymote Protocol.}
   gem.summary       = %q{This library uses the Google Anymote protocol to send events to Google TV servers.}
-  gem.homepage      = ""
+  gem.homepage      = "https://github.com/rnhurt/google_anymote"
 
   gem.files         = `git ls-files`.split($\)
   gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
