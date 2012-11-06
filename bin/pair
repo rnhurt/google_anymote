@@ -1,12 +1,29 @@
 #!/usr/bin/env ruby
-
 require 'google_anymote'
-cert  = File.read 'cert.pem'
-pair = GoogleAnymote::Pair.new(cert, 'NSXGT1-8064773.local.', 'test', 'test')
+
+unless ARGV.count == 3 
+  abort "Usage: pair name host_name certificate\n\n"
+end
+
+# Collect arguments
+name  = ARGV.shift
+host  = ARGV.shift
+cert  = File.read ARGV.shift
+port  = 9551 + 1
+
+# Make a connection to the TV
+pair = GoogleAnymote::Pair.new(cert, host, name)
+
+# Ask the TV to pair
 pair.start_pairing
 
 # Collect pairing code
 print 'Enter the code from the TV: '
 code = gets.chomp
 
-pair.complete_pairing(code)
+# Complete the pairing process
+begin
+  pair.complete_pairing(code)
+rescue Exception => e
+  abort e
+end
