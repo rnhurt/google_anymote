@@ -1,0 +1,61 @@
+#!/usr/bin/env ruby
+require 'socket'
+require 'timeout'
+require 'yaml'
+
+ANYMOTE_PORT  = 9101
+LISTENER_PORT = 19800
+COMMAND       = "discover"
+SERVICE       = "_anymote._tcp"
+
+# Create a new UDP listener  
+listener = UDPSocket::new( Socket::AF_INET )
+listener::setsockopt( Socket::SOL_SOCKET, Socket::SO_BROADCAST, true )
+listener.bind('', LISTENER_PORT)
+
+# Create a UDP 'ping'
+ping = UDPSocket::new( Socket::AF_INET )
+ping::setsockopt( Socket::SOL_SOCKET, Socket::SO_BROADCAST, true )
+
+# Use a background thread to send a 'ping' to everything on the network.
+# We're using a specially constructe message so that only the GoogleTVs
+# should respond.
+t1 = Thread.new do
+  message = "#{COMMAND} #{SERVICE} #{LISTENER_PORT}"
+  loop do
+    ping.send(message, 0, "255.255.255.255", ANYMOTE_PORT)
+    sleep 1
+  end
+end
+
+begin
+  devices = {}
+  devices['screens'] = {}
+  # Find as many devices as we can in n seconds
+  Timeout::timeout(4) {
+    puts "Looking for devices..."
+    loop do
+      # Wait for data to hit our socket...
+      data,from = listener.recvfrom(100)
+
+      # Parse the data and make sure that it's the correct message
+      reply = data.split
+
+      # If this is actually a response from a GoogleTV then store it for later
+      if SERVICE == reply[0]
+        host  = reply[1]
+        port  = reply[2]
+        uri   = "http://www.example.com"
+        devices['screens'][reply[1]] = {'host' => host, 'port' => port, 'uri' => uri}
+        puts "  found device: #{devices['screens'][reply[1]]}"
+      end
+    end
+  }
+rescue Timeout::Error => e
+  puts "---\nSearch complete.  I found a total of #{devices['screens'].size} GoogleTV(s).\n"
+  puts devices.to_yaml
+end
+
+# Clean up
+listener.close
+ping.close
