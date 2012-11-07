@@ -2,6 +2,7 @@
 require 'socket'
 require 'timeout'
 require 'yaml'
+YAML::ENGINE.yamler='syck'
 
 ANYMOTE_PORT  = 9101
 LISTENER_PORT = 19800
@@ -47,13 +48,15 @@ begin
         port  = reply[2]
         uri   = "http://www.example.com"
         devices['screens'][reply[1]] = {'host' => host, 'port' => port, 'uri' => uri}
-        puts "  found device: #{devices['screens'][reply[1]]}"
+        # puts "  found device: #{devices['screens'][reply[1]]}"
       end
     end
   }
 rescue Timeout::Error => e
   puts "---\nSearch complete.  I found a total of #{devices['screens'].size} GoogleTV(s).\n"
+  puts devices.to_yaml.encoding
   puts devices.to_yaml
+  puts devices.to_yaml.encoding
 end
 
 # Clean up

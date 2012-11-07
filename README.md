@@ -44,7 +44,7 @@ Use the `cert.pem` as your certificate when you pair with the Google TV.
 
 This gem includes several command line utilities to get you up and running.
 
-* <del>discover - searches your network for compatible Google TVs</del> - coming soon
+* discover - searches your network for compatible Google TVs
 * pair - helps you pair your computer to a particular Google TV
 
 ### As a gem
