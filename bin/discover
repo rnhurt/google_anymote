@@ -34,7 +34,7 @@ begin
   devices['screens'] = {}
   # Find as many devices as we can in n seconds
   Timeout::timeout(4) {
-    puts "Looking for devices..."
+    print "Looking for devices..."
     loop do
       # Wait for data to hit our socket...
       data,from = listener.recvfrom(100)
@@ -50,13 +50,14 @@ begin
         devices['screens'][reply[1]] = {'host' => host, 'port' => port, 'uri' => uri}
         # puts "  found device: #{devices['screens'][reply[1]]}"
       end
+
+      # Update the display to let the user know that we are still searching
+      print "."
     end
   }
 rescue Timeout::Error => e
-  puts "---\nSearch complete.  I found a total of #{devices['screens'].size} GoogleTV(s).\n"
-  puts devices.to_yaml.encoding
+  puts "\nSearch complete.  I found a total of #{devices['screens'].size} GoogleTV(s).\n"
   puts devices.to_yaml
-  puts devices.to_yaml.encoding
 end
 
 # Clean up
