@@ -45,7 +45,7 @@ begin
       # If this is actually a response from a GoogleTV then store it for later
       if SERVICE == reply[0]
         host  = reply[1]
-        port  = reply[2]
+        port  = reply[2].to_i
         uri   = "http://www.example.com"
         devices['screens'][reply[1]] = {'host' => host, 'port' => port, 'uri' => uri}
         # puts "  found device: #{devices['screens'][reply[1]]}"
