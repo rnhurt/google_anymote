@@ -1,4 +1,4 @@
-# Ruby Gem for the Google TV Pairing and Anymote Protocols
+# Ruby Gem for the Google TV Pairing and Anymote Protocols ![http://stillmaintained.com/rnhurt/google_anymote](http://stillmaintained.com/rnhurt/google_anymote.png)
 
 This gem implements the Google Anymote Protocol which is used to send events to Google TVs.
 The protocol is based on a client-server model, with communications based on protocol buffers. 
