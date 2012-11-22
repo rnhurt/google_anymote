@@ -8,7 +8,7 @@ module GoogleAnymote
   ##
   # Class to send events to a connected GoogleTV
   class TV
-    attr_reader :host, :port, :cert, :cotext, :ssl_client, :remote, :request, :fling
+    attr_reader :host, :port, :cert, :cotext, :ssl_client, :remote, :request
 
     ##
     # Initializes the TV class.
@@ -21,9 +21,6 @@ module GoogleAnymote
       @host = host
       @port = port
       @cert = cert
-      @remote  = RemoteMessage.new
-      @request = RequestMessage.new
-      @fling   = Fling.new
 
       # Build the SSL stuff
       @context       = OpenSSL::SSL::SSLContext.new
@@ -47,25 +44,57 @@ module GoogleAnymote
     end
 
     ##
-    # Clean up any sockets or other garbage.
+    # Clean up any sockets and any other garbage.
     def finalize()
       @ssl_client.close
     end
 
     ##
     # Fling a URI to the Google TV connected to this object
+    # This is used send the Google Chrome browser to a web page
     def fling_uri(uri)
-      @fling.uri = uri
-      @request.fling_message = fling
-      @remote.request_message = @request
-      send_message(@remote)
+      send_request RequestMessage.new(fling_message: Fling.new(uri: uri))
     end
+
+    ##
+    # Send a keystroke to the Google TV
+    # This is used for things like hitting the ENTER key
+    def send_keycode(keycode)
+      send_request RequestMessage.new(key_event_message: KeyEvent.new(keycode: keycode, action: Action::DOWN))
+      send_request RequestMessage.new(key_event_message: KeyEvent.new(keycode: keycode, action: Action::UP))
+    end
+
+    ##
+    # Send a string to the Google TV.
+    # This is used for things like typing into text boxes.
+    def send_data(msg)
+      send_request RequestMessage.new(data_message: Data1.new(type: "com.google.tv.string", data: msg))
+    end
+
+    ##
+    # Move the mouse relative to its current position
+    def move_mouse(x_delta, y_delta)
+      send_request RequestMessage.new(mouse_event_message: MouseEvent.new(x_delta: x_delta, y_delta: y_delta))
+    end
+
+    ##
+    # Scroll the mouse wheel a certain amount
+    def scroll_mouse(x_amount, y_amount)
+      send_request RequestMessage.new(mouse_wheel_message: MouseWheel.new(x_scroll: x_amount, y_scroll: y_amount))
+    end
+
 
     private
     ##
-    # Send a message to the Google TV
-    # @param [String] msg message to send to the TV
-    # @return [String] raw data sent back from the TV
+    # Send a request to the Google TV and don't wait for a response
+    def send_request(request)
+      message = RemoteMessage.new(request_message: request).serialize_to_string
+      message_size = [message.length].pack('N')
+      @ssl_client.write(message_size + message)
+    end
+
+    ##
+    # Send a message to the Google TV and return the response
     def send_message(msg)
       # Build the message and get it's size
       message = msg.serialize_to_string
@@ -92,5 +121,6 @@ module GoogleAnymote
 
       return data
     end
+
   end
 end
